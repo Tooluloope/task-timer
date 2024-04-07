@@ -8,19 +8,20 @@ import (
 	"time"
 
 	"github.com/icza/gox/timex"
+	"github.com/tooluloope/task-timer/pkg/config"
 )
 
 type TimeInterval struct {
 	StartTime string
-	EndTime string
+	EndTime   string
 }
 
 type Task struct {
-	Name string
+	Name          string
 	TimeIntervals []TimeInterval
-	Tags []string
-	CreatedAt string
-	UpdatedAt string
+	Tags          []string
+	CreatedAt     string
+	UpdatedAt     string
 }
 
 type Storage interface {
@@ -33,11 +34,15 @@ type Storage interface {
 
 type CSVStorage struct {
 	filepath string
-	mu sync.Mutex
+	mu       sync.Mutex
 }
 
-var Data = NewCSVStorage("/Users/tolulopeadetula/Documents/GitHub/task-timer/data/data.csv")
+var Data *CSVStorage
 
+func init() {
+	filepath := config.EnvConfigs.DataPath
+	Data = NewCSVStorage(filepath)
+}
 
 func NewCSVStorage(filepath string) *CSVStorage {
 	return &CSVStorage{
@@ -45,23 +50,23 @@ func NewCSVStorage(filepath string) *CSVStorage {
 	}
 }
 
-func (t Task) TotalTime() (totalTime time.Duration, err error) {
+func (t *Task) TotalTime() (totalTime time.Duration, err error) {
 
 	totalTime = 0
-    layout := "2006-01-02T15:04:05"
+	layout := "2006-01-02T15:04:05"
 
-    for _, interval := range t.TimeIntervals {
-        start, err := time.Parse(layout, interval.StartTime)
-        if err != nil {
-            return 0, err
-        }
-        end, err := time.Parse(layout, interval.EndTime)
-        if err != nil {
-            return 0, err
-        }
-        totalTime += end.Sub(start)
-    }
-    return totalTime, nil
+	for _, interval := range t.TimeIntervals {
+		start, err := time.Parse(layout, interval.StartTime)
+		if err != nil {
+			return 0, err
+		}
+		end, err := time.Parse(layout, interval.EndTime)
+		if err != nil {
+			return 0, err
+		}
+		totalTime += end.Sub(start)
+	}
+	return totalTime, nil
 }
 
 func (c *CSVStorage) SaveTask(task Task) error {
@@ -76,8 +81,6 @@ func (c *CSVStorage) SaveTask(task Task) error {
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
-
-
 
 	totalTime, err := task.TotalTime()
 	if err != nil {
