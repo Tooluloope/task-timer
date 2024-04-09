@@ -11,15 +11,17 @@ import (
 var taskName string
 
 var createCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Creates a new task entry",
+	Use:   "create [taskName]",
+	Short: "Creates a new task",
 	Long:  `This command creates a new task entry with the given name. Example: task-timer task create "Project Design"`,
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		createTask()
+		taskName = args[0]
+		createTask(taskName)
 	},
 }
 
-func createTask() {
+func createTask(taskName string) {
 
 	currentTime := time.Now()
 
@@ -30,16 +32,8 @@ func createTask() {
 		fmt.Println(err)
 	}
 	fmt.Printf("Task created with ID: %s\n Use the ID to start your new task\n", id)
-
 }
 
 func init() {
 	TaskCmd.AddCommand(createCmd)
-	createCmd.Flags().StringVarP(&taskName, "name", "n", "", "Name of the task")
-
-	err := createCmd.MarkFlagRequired("name")
-	if err != nil {
-		fmt.Println(err)
-	}
-
 }
