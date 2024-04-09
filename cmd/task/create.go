@@ -9,6 +9,7 @@ import (
 )
 
 var taskName string
+var tags []string
 
 var createCmd = &cobra.Command{
 	Use:   "create [taskName]",
@@ -22,10 +23,9 @@ var createCmd = &cobra.Command{
 }
 
 func createTask(taskName string) {
-
 	currentTime := time.Now()
 
-	task := storage.Task{Name: taskName, UpdatedAt: currentTime, CreatedAt: currentTime}
+	task := storage.Task{Name: taskName, Tags: tags, UpdatedAt: currentTime, CreatedAt: currentTime}
 
 	id, err := storage.Data.SaveTask(task)
 	if err != nil {
@@ -36,4 +36,5 @@ func createTask(taskName string) {
 
 func init() {
 	TaskCmd.AddCommand(createCmd)
+	createCmd.Flags().StringArrayVarP(&tags, "tags", "t", []string{}, "Tags assigned to this task")
 }
