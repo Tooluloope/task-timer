@@ -2,30 +2,33 @@ package storage
 
 import (
 	"encoding/csv"
+	"log"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/icza/gox/timex"
+	"github.com/teris-io/shortid"
 	"github.com/tooluloope/task-timer/pkg/config"
 )
 
 type TimeInterval struct {
-	StartTime string
-	EndTime   string
+	StartTime time.Time
+	EndTime   time.Time
 }
 
 type Task struct {
+	ID            string
 	Name          string
 	TimeIntervals []TimeInterval
 	Tags          []string
-	CreatedAt     string
-	UpdatedAt     string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type Storage interface {
-	SaveTask(task Task) error
+	SaveTask(task Task) (string, error)
 	GetTask(name string) (Task, error)
 	GetAllTasks() ([]Task, error)
 	DeleteTask(name string) error
@@ -35,18 +38,27 @@ type Storage interface {
 type CSVStorage struct {
 	filepath string
 	mu       sync.Mutex
+	sid      *shortid.Shortid
 }
 
 var Data *CSVStorage
 
 func init() {
 	filepath := config.EnvConfigs.DataPath
-	Data = NewCSVStorage(filepath)
+
+	sid, err := shortid.New(1, shortid.DefaultABC, 2342)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	Data = NewCSVStorage(filepath, sid)
 }
 
-func NewCSVStorage(filepath string) *CSVStorage {
+func NewCSVStorage(filepath string, sid *shortid.Shortid) *CSVStorage {
 	return &CSVStorage{
 		filepath: filepath,
+		sid:      sid,
 	}
 }
 
@@ -56,11 +68,11 @@ func (t *Task) TotalTime() (totalTime time.Duration, err error) {
 	layout := "2006-01-02T15:04:05"
 
 	for _, interval := range t.TimeIntervals {
-		start, err := time.Parse(layout, interval.StartTime)
+		start, err := time.Parse(layout, interval.StartTime.Format(layout))
 		if err != nil {
 			return 0, err
 		}
-		end, err := time.Parse(layout, interval.EndTime)
+		end, err := time.Parse(layout, interval.EndTime.Format(layout))
 		if err != nil {
 			return 0, err
 		}
@@ -69,27 +81,45 @@ func (t *Task) TotalTime() (totalTime time.Duration, err error) {
 	return totalTime, nil
 }
 
-func (c *CSVStorage) SaveTask(task Task) error {
+func (c *CSVStorage) SaveTask(task Task) (id string, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	fileInfo, err := os.Stat(c.filepath)
+	writeHeader := os.IsNotExist(err) || (err == nil && fileInfo.Size() == 0)
+
 	file, err := os.OpenFile(c.filepath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		return
 	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
-	defer writer.Flush()
+
+	if writeHeader {
+		header := []string{"ID", "Name", "Total Time", "Tags", "Created At", "Updated At"}
+		if err = writer.Write(header); err != nil {
+			return
+		}
+	}
 
 	totalTime, err := task.TotalTime()
 	if err != nil {
-		return err
+		return
+	}
+	id, err = c.sid.Generate()
+	if err != nil {
+		return
 	}
 
-	record := []string{task.Name, timex.ShortDuration(totalTime), strings.Join(task.Tags, ","), task.CreatedAt, task.UpdatedAt}
+	record := []string{id, task.Name, timex.ShortDuration(totalTime), strings.Join(task.Tags, ","), task.CreatedAt.String(), task.UpdatedAt.String()}
 
-	return writer.Write(record)
+	if err = writer.Write(record); err != nil {
+		return
+	}
+
+	writer.Flush()
+	return id, err
 }
 
 func (c *CSVStorage) GetTask(name string) (Task, error) {
