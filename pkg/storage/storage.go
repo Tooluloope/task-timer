@@ -2,6 +2,8 @@ package storage
 
 import (
 	"encoding/csv"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -29,10 +31,11 @@ type Task struct {
 
 type Storage interface {
 	SaveTask(task Task) (string, error)
-	GetTask(name string) (Task, error)
+	GetTaskByName(name string) (Task, error)
+	GetTaskByID(id string) (Task, error)
 	GetAllTasks() ([]Task, error)
-	DeleteTask(name string) error
-	UpdateTask(task Task) error
+	DeleteTask(id string) error
+	UpdateTask(id string) error
 }
 
 type CSVStorage struct {
@@ -65,20 +68,57 @@ func NewCSVStorage(filepath string, sid *shortid.Shortid) *CSVStorage {
 func (t *Task) TotalTime() (totalTime time.Duration, err error) {
 
 	totalTime = 0
-	layout := "2006-01-02T15:04:05"
 
 	for _, interval := range t.TimeIntervals {
-		start, err := time.Parse(layout, interval.StartTime.Format(layout))
+		start, err := time.Parse(time.RFC3339, interval.StartTime.Format(time.RFC3339))
 		if err != nil {
 			return 0, err
 		}
-		end, err := time.Parse(layout, interval.EndTime.Format(layout))
+		end, err := time.Parse(time.RFC3339, interval.EndTime.Format(time.RFC3339))
 		if err != nil {
 			return 0, err
 		}
 		totalTime += end.Sub(start)
 	}
 	return totalTime, nil
+}
+
+func (t *Task) serializeIntervals() (timeIntervals []string, err error) {
+	for _, interval := range t.TimeIntervals {
+		timeIntervals = append(timeIntervals, fmt.Sprintf("%s,%s",
+			interval.StartTime.Format(time.RFC3339),
+			interval.EndTime.Format(time.RFC3339)))
+	}
+
+	return
+}
+
+func deserializeIntervals(intervals string) (timeIntervals []TimeInterval, err error) {
+
+	if intervals == "" {
+		return
+	}
+
+	intervalStrings := strings.Split(intervals, ";")
+	var (
+		startTime time.Time
+		endTime   time.Time
+	)
+
+	for _, intervalString := range intervalStrings {
+		times := strings.Split(intervalString, ",")
+		startTime, err = time.Parse(time.RFC3339, times[0])
+		if err != nil {
+			return
+		}
+		endTime, err = time.Parse(time.RFC3339, times[1])
+		if err != nil {
+			return
+		}
+		timeIntervals = append(timeIntervals, TimeInterval{StartTime: startTime, EndTime: endTime})
+	}
+
+	return
 }
 
 func (c *CSVStorage) SaveTask(task Task) (id string, err error) {
@@ -97,22 +137,28 @@ func (c *CSVStorage) SaveTask(task Task) (id string, err error) {
 	writer := csv.NewWriter(file)
 
 	if writeHeader {
-		header := []string{"ID", "Name", "Total Time", "Tags", "Created At", "Updated At"}
+		header := []string{"ID", "Name", "Time Intervals", "Total Time", "Tags", "Created At", "Updated At"}
 		if err = writer.Write(header); err != nil {
 			return
 		}
+	}
+
+	timeIntervals, err := task.serializeIntervals()
+	if err != nil {
+		return
 	}
 
 	totalTime, err := task.TotalTime()
 	if err != nil {
 		return
 	}
+
 	id, err = c.sid.Generate()
 	if err != nil {
 		return
 	}
 
-	record := []string{id, task.Name, timex.ShortDuration(totalTime), strings.Join(task.Tags, ","), task.CreatedAt.String(), task.UpdatedAt.String()}
+	record := []string{id, task.Name, strings.Join(timeIntervals, ";"), timex.ShortDuration(totalTime), strings.Join(task.Tags, ";"), task.CreatedAt.Format(time.RFC3339), task.UpdatedAt.Format(time.RFC3339)}
 
 	if err = writer.Write(record); err != nil {
 		return
@@ -122,7 +168,64 @@ func (c *CSVStorage) SaveTask(task Task) (id string, err error) {
 	return id, err
 }
 
-func (c *CSVStorage) GetTask(name string) (Task, error) {
+func (c *CSVStorage) GetTaskByID(id string) (task Task, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	file, err := os.Open(c.filepath)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return Task{}, err
+		}
+
+		if record[0] == id {
+
+			var (
+				createdAt time.Time
+				updatedAt time.Time
+				intervals []TimeInterval
+			)
+
+			intervals, err = deserializeIntervals(record[2])
+			if err != nil {
+				return Task{}, err
+			}
+			createdAt, err = time.Parse(time.RFC3339, record[5])
+			if err != nil {
+				return Task{}, err
+			}
+			updatedAt, err = time.Parse(time.RFC3339, record[6])
+			if err != nil {
+				return Task{}, err
+			}
+			return Task{
+
+				ID:            record[0],
+				Name:          record[1],
+				TimeIntervals: intervals,
+				Tags:          strings.Split(record[4], ";"),
+				CreatedAt:     createdAt,
+				UpdatedAt:     updatedAt,
+			}, nil
+		}
+	}
+
+	return Task{}, nil
+}
+
+func (c *CSVStorage) GetTaskByName(name string) (Task, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return Task{}, nil
@@ -134,13 +237,13 @@ func (c *CSVStorage) GetAllTasks() ([]Task, error) {
 	return []Task{}, nil
 }
 
-func (c *CSVStorage) DeleteTask(name string) error {
+func (c *CSVStorage) DeleteTask(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return nil
 }
 
-func (c *CSVStorage) UpdateTask(task Task) error {
+func (c *CSVStorage) UpdateTask(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return nil

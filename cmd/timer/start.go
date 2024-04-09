@@ -8,20 +8,48 @@ import (
 	"github.com/tooluloope/task-timer/pkg/storage"
 )
 
+var taskId string
 var taskName string
 
 var startCmd = &cobra.Command{
-	Use:   "start",
+	Use:   "start [task_ID]",
 	Short: "Starts a timer for the specified task",
-	Long:  `This command starts a timer for the task specified by <task_name>. If the task does not exist, it creates a new task entry with the given name. Example: task-timer start "Project Design"`,
+	Long:  `This command starts a timer for the task specified by <ID> or --name <task_name>.`,
+	Args:  cobra.MaximumNArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		taskName, _ := cmd.Flags().GetString("name")
+
+		if (len(args) == 0 && taskName == "") || (len(args) == 1 && taskName != "") {
+			return fmt.Errorf("you must specify either a task ID as an argument or a task name using the --name flag, but not both")
+		}
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("start called")
+		taskId = args[0]
+		taskName, _ = cmd.Flags().GetString("name")
+
+		if taskId != "" {
+			startTaskByID()
+		} else {
+			startTaskByName()
+		}
 	},
 }
 
-func startTask() {
+func startTaskByID() {
 
-	task, err := storage.Data.GetTask(taskName)
+	task, err := storage.Data.GetTaskByID(taskId)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(task)
+}
+
+func startTaskByName() {
+
+	task, err := storage.Data.GetTaskByName(taskId)
 
 	if err != nil {
 		log.Fatal(err)
@@ -34,8 +62,8 @@ func init() {
 	TimerCmd.AddCommand(startCmd)
 	startCmd.Flags().StringVarP(&taskName, "name", "n", "", "Name of the task")
 
-	err := startCmd.MarkFlagRequired("name")
-	if err != nil {
-		fmt.Println(err)
-	}
+	// err := startCmd.MarkFlagRequired("name")
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
 }
