@@ -8,10 +8,10 @@ import (
 	"github.com/tooluloope/task-timer/pkg/storage"
 )
 
-var startCmd = &cobra.Command{
-	Use:   "start [task_ID]",
-	Short: "Starts a timer for the specified task",
-	Long:  `This command starts a timer for the task specified by <ID> or --name <task_name>.`,
+var stopCmd = &cobra.Command{
+	Use:   "stop [task_ID]",
+	Short: "Stops a timer for the specified task",
+	Long:  `This command stops a timer for the task specified by <ID> or --name <task_name>.`,
 	Args:  cobra.MaximumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		taskName, _ := cmd.Flags().GetString("name")
@@ -25,27 +25,27 @@ var startCmd = &cobra.Command{
 
 		if len(args) == 1 {
 			taskId = args[0]
-			startTaskByID()
+			stopTaskByID()
 		} else {
 			taskName, _ = cmd.Flags().GetString("name")
-			startTaskByName()
+			stopTaskByName()
 		}
 	},
 }
 
-func startTaskByID() {
+func stopTaskByID() {
 	task, err := storage.Data.GetTaskByID(taskId)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := storage.Data.StartTask(task); err != nil {
+	if err := storage.Data.StopTask(task); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(task)
 }
 
-func startTaskByName() {
+func stopTaskByName() {
 
 	tasks, err := storage.Data.GetTasksByName(taskName)
 	if err != nil {
@@ -56,11 +56,6 @@ func startTaskByName() {
 }
 
 func init() {
-	TimerCmd.AddCommand(startCmd)
-	startCmd.Flags().StringVarP(&taskName, "name", "n", "", "Name of the task")
-
-	// err := startCmd.MarkFlagRequired("name")
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
+	TimerCmd.AddCommand(stopCmd)
+	stopCmd.Flags().StringVarP(&taskName, "name", "n", "", "Name of the task")
 }

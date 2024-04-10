@@ -6,6 +6,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var taskId string
+var taskName string
+
 // timerCmd represents the timer command
 var TimerCmd = &cobra.Command{
 	Use:   "timer",
