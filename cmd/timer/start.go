@@ -25,19 +25,18 @@ var startCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		taskId = args[0]
-		taskName, _ = cmd.Flags().GetString("name")
 
-		if taskId != "" {
+		if len(args) == 1 {
+			taskId = args[0]
 			startTaskByID()
 		} else {
+			taskName, _ = cmd.Flags().GetString("name")
 			startTaskByName()
 		}
 	},
 }
 
 func startTaskByID() {
-
 	task, err := storage.Data.GetTaskByID(taskId)
 
 	if err != nil {
@@ -49,13 +48,13 @@ func startTaskByID() {
 
 func startTaskByName() {
 
-	task, err := storage.Data.GetTaskByName(taskId)
+	tasks, err := storage.Data.GetTasksByName(taskName)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Print(task)
+	fmt.Print(tasks)
 }
 
 func init() {

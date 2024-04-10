@@ -25,7 +25,7 @@ var createCmd = &cobra.Command{
 func createTask(taskName string) {
 	currentTime := time.Now()
 
-	task := storage.Task{Name: taskName, Tags: tags, UpdatedAt: currentTime, CreatedAt: currentTime}
+	task := storage.Task{Name: taskName, Tags: tags, Status: storage.Created.String(), UpdatedAt: currentTime, CreatedAt: currentTime}
 
 	id, err := storage.Data.SaveTask(task)
 	if err != nil {
