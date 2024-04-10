@@ -48,7 +48,7 @@ type Task struct {
 	TimeIntervals []TimeInterval
 	Tags          []string
 	Status        string
-	TotalTime     string
+	TotalTime     time.Duration
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -73,9 +73,7 @@ var Data *CSVStorage
 
 func init() {
 	filepath := config.EnvConfigs.DataPath
-
 	sid, err := shortid.New(1, shortid.DefaultABC, 2342)
-
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,31 +94,14 @@ func NewCSVStorage(filepath string, sid *shortid.Shortid) *CSVStorage {
 
 func (t *Task) getTotalTime() (totalTime time.Duration, err error) {
 
-	if t.TotalTime != "" {
-		totalTime, err = time.ParseDuration(t.TotalTime)
-	}
-	fmt.Println(t.TotalTime)
-
-	if err != nil {
-		return
-	}
+	totalTime = t.TotalTime
 
 	for _, interval := range t.TimeIntervals {
-		start, err := time.Parse(time.RFC3339, interval.StartTime.Format(time.RFC3339))
-		if err != nil {
-			return 0, err
-		}
-		end, err := time.Parse(time.RFC3339, interval.EndTime.Format(time.RFC3339))
-		if err != nil {
-			return 0, err
-		}
-
-		if end.IsZero() {
-			totalTime += time.Since(start)
+		if interval.EndTime.IsZero() {
+			totalTime += time.Since(interval.StartTime)
 		} else {
-			totalTime += end.Sub(start)
+			totalTime += interval.EndTime.Sub(interval.StartTime)
 		}
-
 	}
 	return totalTime, nil
 }
@@ -206,6 +187,10 @@ func (c *CSVStorage) SaveTask(task Task) (id string, err error) {
 		return
 	}
 
+	if err = writer.Error(); err != nil {
+		return
+	}
+
 	writer.Flush()
 	return id, err
 }
@@ -282,7 +267,7 @@ func (c *CSVStorage) StartTask(task Task) error {
 	if err != nil {
 		return err
 	}
-	task.TotalTime = timex.ShortDuration(totalTime)
+	task.TotalTime = totalTime
 	task.TimeIntervals = []TimeInterval{{
 		StartTime: time.Now(),
 	}}
@@ -399,6 +384,10 @@ func RecordToTask(record []string) (task Task, err error) {
 	if err != nil {
 		return Task{}, err
 	}
+	totalTime, err := time.ParseDuration(record[TotalTime])
+	if err != nil {
+		return Task{}, err
+	}
 
 	task = Task{
 		ID:            record[ID],
@@ -406,7 +395,7 @@ func RecordToTask(record []string) (task Task, err error) {
 		TimeIntervals: intervals,
 		Tags:          strings.Split(record[Tags], ";"),
 		Status:        record[Status],
-		TotalTime:     record[TotalTime],
+		TotalTime:     totalTime,
 		CreatedAt:     createdAt,
 		UpdatedAt:     updatedAt,
 	}
