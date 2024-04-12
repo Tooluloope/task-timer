@@ -3,7 +3,9 @@ package timer
 import (
 	"fmt"
 	"log"
+	"strconv"
 
+	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/tooluloope/task-timer/pkg/storage"
 )
@@ -42,17 +44,35 @@ func startTaskByID() {
 	if err := storage.Data.StartTask(task); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(task)
 }
 
 func startTaskByName() {
+	var task storage.Task
 
 	tasks, err := storage.Data.GetTasksByName(taskName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Print(tasks)
+	if len(tasks) > 1 {
+		prompt := promptui.Select{
+			Label: fmt.Sprintf("%s tasks found using that name, Select the task you want to start", strconv.Itoa(len(tasks))),
+			Items: tasks,
+		}
+
+		pos, result, err := prompt.Run()
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("You chose %q\n", result)
+		task = tasks[pos]
+	} else {
+		task = tasks[0]
+	}
+
+	if err := storage.Data.StartTask(task); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func init() {

@@ -3,7 +3,6 @@ package storage
 import (
 	"encoding/csv"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"strings"
@@ -165,23 +164,16 @@ func (c *CSVStorage) SaveTask(task Task) (id string, err error) {
 			return
 		}
 	}
-
-	timeIntervals, err := task.serializeIntervals()
-	if err != nil {
-		return
-	}
-
-	totalTime, err := task.getTotalTime()
-	if err != nil {
-		return
-	}
-
 	id, err = c.sid.Generate()
 	if err != nil {
 		return
 	}
+	task.ID = id
 
-	record := []string{id, task.Name, strings.Join(timeIntervals, ";"), timex.ShortDuration(totalTime), strings.Join(task.Tags, ";"), task.Status, task.CreatedAt.Format(time.RFC3339), task.UpdatedAt.Format(time.RFC3339)}
+	record, err := taskToRecord(task)
+	if err != nil {
+		return
+	}
 
 	if err = writer.Write(record); err != nil {
 		return
@@ -205,13 +197,6 @@ func (c *CSVStorage) GetTaskByID(id string) (task Task, err error) {
 	}
 
 	for _, record := range records {
-		if err == io.EOF {
-			return Task{}, fmt.Errorf("no task found with id %s", id)
-		}
-
-		if err != nil {
-			return Task{}, err
-		}
 
 		if record[ID] == id {
 			return RecordToTask(record)
@@ -315,7 +300,6 @@ func updateTask(task Task, ctx *CSVStorage) error {
 
 			break
 		}
-		fmt.Println(record)
 	}
 
 	if !updated {
